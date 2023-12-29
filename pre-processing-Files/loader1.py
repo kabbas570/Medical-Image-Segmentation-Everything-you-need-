@@ -6,19 +6,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import SimpleITK as sitk
 #from typing import List, Union, Tuple
-import torch
-import albumentations as A
-import cv2
-from torch.utils.data import SubsetRandomSampler
-import torchio as tio
-from sklearn.model_selection import KFold
-           ###########  Dataloader  #############
 
+import torchio as tio
+           ###########  Dataloader  #############
 NUM_WORKERS=0
 PIN_MEMORY=True
 DIM_ = 256
    
-def Generate_Meta_(vendors_,scanners_,diseases_): 
+def Generate_Meta_Data(vendors_): 
     temp = np.zeros([8,8])
     if vendors_=='GE MEDICAL SYSTEMS': 
         temp[0:4,0:4] = 0.8
@@ -111,60 +106,89 @@ def Normalization_1(img):
         img=(img-mean)/std
         return img 
 
-     
-def generate_label(gt,org_dim3):
-        temp_ = np.zeros([4,org_dim3,DIM_,DIM_])
-        temp_[0,:,:,:][np.where(gt==1)]=1
-        temp_[1,:,:,:][np.where(gt==2)]=1
-        temp_[2,:,:,:][np.where(gt==3)]=1
-        temp_[3,:,:,:][np.where(gt==0)]=1
+geometrical_transforms = tio.OneOf([
+    tio.RandomFlip(axes=([1, 2])),
+    tio.RandomElasticDeformation(num_control_points=(5, 5, 5), locked_borders=1, image_interpolation='nearest'),
+    tio.RandomAffine(degrees=(-45, 45), center='image'),
+])
+
+intensity_transforms = tio.OneOf([
+    tio.RandomBlur(),
+    tio.RandomGamma(log_gamma=(-0.2, -0.2)),
+    tio.RandomNoise(mean=0.1, std=0.1),
+    tio.RandomGhosting(axes=([1, 2])),
+])
+
+transforms_2d = tio.Compose({
+    geometrical_transforms: 0.3,  # Probability for geometric transforms
+    intensity_transforms: 0.3,   # Probability for intensity transforms
+    tio.Lambda(lambda x: x): 0.4 # Probability for no augmentation (original image)
+})
+   
+def generate_label(gt):
+        temp_ = np.zeros([4,DIM_,DIM_])
+        temp_[0:1,:,:][np.where(gt==1)]=1
+        temp_[1:2,:,:][np.where(gt==2)]=1
+        temp_[2:3,:,:][np.where(gt==3)]=1
+        temp_[3:4,:,:][np.where(gt==0)]=1
         return temp_
-
-
-    
+ 
 class Dataset_io(Dataset): 
-    def __init__(self, df, images_folder,transformations=None):  ## If I apply Data Augmentation here, the validation loss becomes None. 
+    def __init__(self, df, images_folder,transformations=transforms_2d):  ## If I apply Data Augmentation here, the validation loss becomes None. 
         self.df = df
         self.images_folder = images_folder
         self.gt_folder = self.images_folder[:-4] + 'gts'
         self.vendors = df['VENDOR']       
-        #self.images_name = df['SUBJECT_CODE'] 
+        self.images_name1 = df['SUBJECT_CODE'] 
         self.transformations = transformations
         
         self.images_name = os.listdir(images_folder)
         
     def __len__(self):
-        return self.vendors.shape[0]
+       return len(self.images_name)
     def __getitem__(self, index):
         img_path = os.path.join(self.images_folder,str(self.images_name[index]).zfill(3))
-        print(img_path)
         img = sitk.ReadImage(img_path)    ## --> [H,W,C]
         img = resample_itk_image_LA(img)      ## --> [H,W,C]
         img = sitk.GetArrayFromImage(img)   ## --> [C,H,W]
+        img = Normalization_1(img)
         C = img.shape[0]
         H = img.shape[1]
         W = img.shape[2]
-
         img = Cropping_3d(C,H,W,256,img)
-        print(img.shape)
-
+        img = np.expand_dims(img, axis=3)
         
         gt_path = os.path.join(self.gt_folder,str(self.images_name[index]).zfill(3))
         gt_path = gt_path[:-7]+'_gt.nii.gz'
         gt = sitk.ReadImage(gt_path)    ## --> [H,W,C]
         gt = resample_itk_image_LA(gt)      ## --> [H,W,C]
         gt = sitk.GetArrayFromImage(gt)   ## --> [C,H,W]
-        
         C = gt.shape[0]
         H = gt.shape[1]
         W = gt.shape[2]
-
         gt = Cropping_3d(C,H,W,256,gt)
-        print(gt.shape)
+        gt = np.expand_dims(gt, axis=3)
         
-        return img,gt
+        d = {}
+        d['Image'] = tio.Image(tensor = img, type=tio.INTENSITY)
+        d['Mask'] = tio.Image(tensor = gt, type=tio.LABEL)
+        sample = tio.Subject(d)
+        if self.transformations is not None:
+            transformed_tensor = self.transformations(sample)
+            img = transformed_tensor['Image'].data
+            gt = transformed_tensor['Mask'].data
+    
+        gt = gt[...,0]
+        img = img[...,0] 
+        gt_all = np.zeros_like(gt)
+        gt_all[np.where(gt!=0)]=1
+        gt = generate_label(gt)
+        number = int(self.images_name[index][:3])
+        vendor = self.vendors[number-32-1]
+        M = Generate_Meta_Data(vendor)
+        M = np.expand_dims(M, axis=0)
         
-        
+        return img,gt,gt_all,M,number
         
 def Data_Loader_io_transforms(df,images_folder,batch_size,num_workers=NUM_WORKERS,pin_memory=PIN_MEMORY):
     test_ids = Dataset_io(df=df ,images_folder=images_folder)
@@ -172,17 +196,30 @@ def Data_Loader_io_transforms(df,images_folder,batch_size,num_workers=NUM_WORKER
     return data_loader
 
 
-val_imgs = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F1\val\imgs' ## path to images
-val_csv_path = r"C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F1\val\F1_val.csv"
+val_imgs = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F1\train\imgs' ## path to images
+val_csv_path = r"C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F1\train\F1_train.csv"
 df_val = pd.read_csv(val_csv_path)
 train_loader = Data_Loader_io_transforms(df_val,val_imgs,batch_size = 1)
 a = iter(train_loader)
-a1 =next(a)
+
+for t in range(256):
+    a1 =next(a)
+    if a1[4] == 40:
+        print(a1[4])
+        print(a1[3])
+    
+    #print(a1[3])
 
 
-img=a1[0]
-plt.figure()
-plt.imshow(img[0,0,:])
-gt=a1[1]
-plt.figure()
-plt.imshow(gt[0,0,:])
+# img=a1[0]
+# plt.figure()
+# plt.imshow(img[0,0,:])
+# gt=a1[1]
+
+# for i in range(4):
+#     plt.figure()
+#     plt.imshow(gt[0,i,:])
+
+# gt_all=a1[2]
+# plt.figure()
+# plt.imshow(gt_all[0,0,:])
