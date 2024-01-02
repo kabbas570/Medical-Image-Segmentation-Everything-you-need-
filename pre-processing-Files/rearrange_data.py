@@ -18,27 +18,35 @@ def copy_files_with_suffix(source_dir, dest_dir, suffix):
                     dest_file = os.path.join(dest_dir, file)
                     shutil.copy(src_file, dest_file)
 
+
+fold = str(2)
+
+split = 'val'
+
+source_directory1 = r'C:\My_Data\M2M Data\data\data_2\five_fold\F'+fold+'/'+ split
+
 # Example usage:
-source_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\F1\train'
-destination_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F1\train\imgs'
+source_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\F'+fold+'/' + split
+destination_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F'+fold+'/val\imgs'
 file_suffix = '_LA_ES'  # Replace with your desired suffix
 copy_files_with_suffix(source_directory, destination_directory, file_suffix)
 
 # Example usage:
-source_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\F1\train'
-destination_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F1\train\imgs'
+source_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\F'+fold+'/' + split
+destination_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F'+fold+'/val\imgs'
 file_suffix = '_LA_ED'  # Replace with your desired suffix
 copy_files_with_suffix(source_directory, destination_directory, file_suffix)
 
 
 # Example usage:
-source_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\F1\train'
-destination_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F1\train\gts'
+source_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\F'+fold+'/' + split
+destination_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F'+fold+'/val\gts'
 file_suffix = '_LA_ES_gt'  # Replace with your desired suffix
 copy_files_with_suffix(source_directory, destination_directory, file_suffix)
 
 # Example usage:
-source_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\F1\train'
-destination_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F1\train\gts'
+source_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\F'+fold+'/' + split
+destination_directory = r'C:\My_Data\M2M Data\data\data_2\five_fold\sep\LA_Data\F'+fold+'/val\gts'
 file_suffix = '_LA_ED_gt'  # Replace with your desired suffix
 copy_files_with_suffix(source_directory, destination_directory, file_suffix)
+
