@@ -44,12 +44,12 @@ def get_pixel_intensities(img_paths):
         if vendor=='SIEMENS':
              plt.imsave(r'C:\My_Data\M2M Data\data\data_2\three_vendor\all\S/' + name + '.png',image1[0,:])
              plt.imsave(r'C:\My_Data\M2M Data\data\data_2\three_vendor\all\S/' + name + '_bg.png',image2[0,:])
-             pixels_S_F.append(image.flatten())
+             pixels_S_F.append(image1.flatten())
              pixels_S_B.append(image2.flatten())
         if vendor=='Philips Medical Systems':
              plt.imsave(r'C:\My_Data\M2M Data\data\data_2\three_vendor\all\P/' + name + '.png',image1[0,:])
              plt.imsave(r'C:\My_Data\M2M Data\data\data_2\three_vendor\all\P/' + name + '_bg.png',image2[0,:])
-             pixels_P_F.append(image.flatten())
+             pixels_P_F.append(image1.flatten())
              pixels_P_B.append(image2.flatten())
         
         
@@ -88,3 +88,7 @@ print('S_Mean_Bckground    -->',np.mean(np.concatenate(pixels_S_B)))
 print('S_STD_Foreground    -->',np.std(np.concatenate(pixels_S_F)))
 
 print('S_STD_Bckground   -->',np.std(np.concatenate(pixels_S_B)))
+
+
+
+a1 = np.concatenate(pixels_S_F)
