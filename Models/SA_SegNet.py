@@ -109,7 +109,7 @@ class OutConv(nn.Module):
 
 Base = 32
 class BaseLine1(nn.Module):
-    def __init__(self, n_channels = 1):
+    def __init__(self, n_channels = 3):
         super(BaseLine1, self).__init__()
         self.n_channels = n_channels
 
@@ -144,7 +144,7 @@ class BaseLine1(nn.Module):
 
         return logits1
     
-# Input_Image_Channels = 1
+# Input_Image_Channels = 3
 # def model() -> BaseLine1:
 #     model = BaseLine1()
 #     return model
@@ -156,7 +156,7 @@ class BaseLine1(nn.Module):
 
 from ptflops import get_model_complexity_info
 net = BaseLine1()
-flops, params = get_model_complexity_info(net, (1, 112,128,112), as_strings=True,
+flops, params = get_model_complexity_info(net, (3, 112,128,112), as_strings=True,
                                             print_per_layer_stat=True, verbose=True)
 print('{:<30}  {:<8}'.format('Computational complexity: ', flops))
 print('{:<30}  {:<8}'.format('Number of parameters: ', params))
