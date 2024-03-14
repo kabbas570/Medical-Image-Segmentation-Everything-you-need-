@@ -1,3 +1,8 @@
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
+    
+
 import torch
 from torch import autograd, optim
 
@@ -8,4 +13,4 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,50,80
 for epoch in range(100):
     scheduler.step()
     optimizer.step()
-    print(epoch, '    ',scheduler.get_last_lr())
+    print(epoch, '    ',scheduler.get_last_lr(), '   ',get_lr(optimizer))
