@@ -41,7 +41,7 @@ class Double_SSM_Block_Custom_Channel(nn.Module):
           d_model = self.n_channels,
           out_c = self.out_channels,
           d_state=16,  
-          d_conv=4,   
+          #d_conv=4,   
           expand=2,
       )
 
@@ -97,7 +97,20 @@ class Up(nn.Module):
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
 
+class Up_Final(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        
+        self.up1 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.up2 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
 
+    def forward(self, x1, x2):
+        x1 = self.up1(x1)
+        x2 = self.up2(x2)
+        x = torch.cat([x2, x1], dim=1)
+        return self.conv(x)
+    
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
@@ -118,7 +131,7 @@ class UNet(nn.Module):
         super(UNet, self).__init__()
         self.n_channels = n_channels
 
-        self.inc = DoubleConv(n_channels, 64)
+        self.inc = DoubleConv(64, 64)
         self.down1 = Down(64, 128)
         self.down2 = Down(128, 256)
         self.down3 = Down(256, 512)
@@ -132,6 +145,8 @@ class UNet(nn.Module):
         self.PatchEmbed_1 = PatchEmbed()        
         self.pos_embed = nn.Parameter(torch.zeros(1, 128*128, 64))
         self.pos_drop = nn.Dropout(p=0.1)
+        
+        self.up5 = Up_Final(128,64)
 
     def forward(self, inp):
         inp = self.PatchEmbed_1(inp)
@@ -148,6 +163,7 @@ class UNet(nn.Module):
         x = self.up2(x, x3)
         x = self.up3(x, x2)
         x = self.up4(x, x1)
+        x = self.up5(x,inp)
         x = self.outc(x)
         return x
 
