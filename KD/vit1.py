@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import to_2tuple
+from einops import rearrange
+
 
 init_embd = 96
 img_size = 160
@@ -183,6 +185,31 @@ class PatchMerging(nn.Module):  # [2,1600,96] -->[2,400,192]
         flops += (H // 2) * (W // 2) * 4 * self.dim * 2 * self.dim
         return flops
 
+class PatchExpand(nn.Module):
+    def __init__(self, dim, dim_scale=2, norm_layer=nn.LayerNorm):
+        super().__init__()
+        self.dim = dim 
+        
+        print(dim,' ----',2*dim)
+        self.expand = nn.Linear(dim, 2*dim, bias=False) if dim_scale==2 else nn.Identity()
+        self.norm = norm_layer(dim//2)
+        
+    def forward(self, x):
+
+        b,c,h,w = x.shape
+        x = x.flatten(2).transpose(1, 2) 
+        x = self.expand(x)
+        B,L, C = x.shape
+        x = x.view(B, h, w, C)
+        
+        x = rearrange(x, 'b h w (p1 p2 c)-> b (h p1) (w p2) c', p1=2, p2=2, c=C//4)
+        x = x.view(B,-1,C//4)
+        x = self.norm(x)
+        x = x.transpose(1, 2) 
+        x = x.view(B, C//4,2*h, 2*w)
+        return x
+    
+    
 class Down(nn.Module):
     def __init__(self, embed_dim,n_heads,mlp_ratio,qkv_bias,p,attn_p):
         super().__init__()
@@ -197,6 +224,22 @@ class Down(nn.Module):
         )
     def forward(self, x):
         return self.down(x)
+    
+class Up(nn.Module):
+    def __init__(self, embed_dim,n_heads,mlp_ratio,qkv_bias,p,attn_p):
+        super().__init__()
+        self.up = nn.Sequential(
+            PatchExpand(embed_dim),
+            Block(dim=embed_dim//2,
+                    n_heads=n_heads,
+                    mlp_ratio=mlp_ratio,
+                    qkv_bias=qkv_bias,
+                    p=p,
+                    attn_p=attn_p),
+        )
+    def forward(self, x):
+        print('this,',x.shape)
+        return self.up(x)
     
     
 class Att_UNet(nn.Module):
@@ -213,6 +256,11 @@ class Att_UNet(nn.Module):
         self.down2 = Down(embed_dim=2*init_embd,n_heads=4,mlp_ratio=4., qkv_bias=True,p=0.,attn_p=0.)
         self.down3 = Down(embed_dim=4*init_embd,n_heads=4,mlp_ratio=4., qkv_bias=True,p=0.,attn_p=0.)
         self.down4 = Down(embed_dim=8*init_embd,n_heads=4,mlp_ratio=4., qkv_bias=True,p=0.,attn_p=0.)
+        
+        self.up1 = Up(embed_dim=16*init_embd,n_heads=4,mlp_ratio=4., qkv_bias=True,p=0.,attn_p=0.)
+        self.up2 = Up(embed_dim=8*init_embd,n_heads=4,mlp_ratio=4., qkv_bias=True,p=0.,attn_p=0.)
+        self.up3 = Up(embed_dim=4*init_embd,n_heads=4,mlp_ratio=4., qkv_bias=True,p=0.,attn_p=0.)
+        self.up4 = Up(embed_dim=2*init_embd,n_heads=4,mlp_ratio=4., qkv_bias=True,p=0.,attn_p=0.)
                 
     def forward(self, inp):
         print(inp.size())
@@ -231,6 +279,9 @@ class Att_UNet(nn.Module):
         
         x4 = self.down4(x3)
         print(x4.size())
+        
+        y = self.up1(x4)
+        print(y.size())
 
         return x4
     
