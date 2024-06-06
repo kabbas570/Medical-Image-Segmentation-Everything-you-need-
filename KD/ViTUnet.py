@@ -3,7 +3,26 @@ import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import to_2tuple
 from einops import rearrange
+import math
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+def positionalencoding1d(d_model, length):
+    """
+    :param d_model: dimension of the model
+    :param length: length of positions
+    :return: length*d_model position matrix
+    """
+    if d_model % 2 != 0:
+        raise ValueError("Cannot use sin/cos positional encoding with "
+                         "odd dim (got dim={:d})".format(d_model))
+    pe = torch.zeros(length, d_model)
+    position = torch.arange(0, length).unsqueeze(1)
+    div_term = torch.exp((torch.arange(0, d_model, 2, dtype=torch.float) *
+                         -(math.log(10000.0) / d_model)))
+    pe[:, 0::2] = torch.sin(position.float() * div_term)
+    pe[:, 1::2] = torch.cos(position.float() * div_term)
+
+    return pe
 
 init_embd = 24
 img_size = 160
@@ -14,12 +33,8 @@ class PatchEmbed(nn.Module): # [2,1,160,160] -->[2,1600,96]
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
-        patches_resolution = [img_size[0] //
-                              patch_size[0], img_size[1] // patch_size[1]]
         self.img_size = img_size
         self.patch_size = patch_size
-        self.patches_resolution = patches_resolution
-        self.num_patches = patches_resolution[0] * patches_resolution[1]
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
@@ -31,6 +46,8 @@ class PatchEmbed(nn.Module): # [2,1,160,160] -->[2,1600,96]
             
         else:
             self.norm = None
+            
+        self.pos_embed =  positionalencoding1d(embed_dim,(img_size[0]//2)**2).to(DEVICE)
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -40,7 +57,8 @@ class PatchEmbed(nn.Module): # [2,1,160,160] -->[2,1600,96]
         x = self.proj(x).flatten(2).transpose(1, 2)  # B Ph*Pw C
         if self.norm is not None:
             x = self.norm(x)
-        
+               
+        x = x + self.pos_embed 
         x = x.permute(0,2,1)
         x = x.view(B, self.embed_dim, H//patch_size, W//patch_size)
         return x
@@ -318,9 +336,9 @@ class Up(nn.Module):
         return self.blk(c)
     
     
-class Att_UNet(nn.Module):
+class Net(nn.Module):
     def __init__(self):
-        super(Att_UNet, self).__init__()
+        super(Net, self).__init__()
         
         self.patch_embd  = PatchEmbed(
                 img_size=img_size,
@@ -359,8 +377,8 @@ class Att_UNet(nn.Module):
     
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-def model() -> Att_UNet:
-    model = Att_UNet()
+def model() -> Net:
+    model = Net()
     model.to(device=DEVICE,dtype=torch.float)
     return model
 from torchsummary import summary
