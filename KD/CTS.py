@@ -121,9 +121,9 @@ class MLP(nn.Module):
         self.act = nn.GELU()
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(p)
-
+        
     def forward(self, x):
-
+        
         x = self.fc1(
                 x
         ) # (n_samples, n_patches + 1, hidden_features)
@@ -134,6 +134,29 @@ class MLP(nn.Module):
 
         return x
 
+
+
+class MLP1(nn.Module):
+    def __init__(self, in_features, hidden_features, out_features, p=0.):
+        super().__init__()
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.act = nn.GELU()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(p)
+        
+    def forward(self, x):
+        
+        x = self.fc1(
+                x
+        ) # (n_samples, n_patches + 1, hidden_features)
+        x = self.act(x)  # (n_samples, n_patches + 1, hidden_features)
+        x = self.drop(x)  # (n_samples, n_patches + 1, hidden_features)
+        x = self.fc2(x)  # (n_samples, n_patches + 1, out_features)
+        x = self.drop(x)  # (n_samples, n_patches + 1, out_features)
+
+        return x
+    
+    
 
 class Block(nn.Module):
     def __init__(self, dim,n_heads, mlp_ratio=4.0, qkv_bias=True, p=0., attn_p=0.,up=None):
@@ -451,10 +474,11 @@ class Up_c(nn.Module):
                         diffY // 2, diffY - diffY // 2])
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
-    
-init_embd_s = 6
-init_embd_tt = 12
-init_embd_tc = 12
+
+
+factor = 2
+init_embd_tt = init_embd_tc= 12
+init_embd_s = init_embd_tc//2
 
 
 class SNet(nn.Module):
@@ -579,6 +603,41 @@ class TCNet(nn.Module):
         out = self.outc(y5)
         return x0,c1,c2,c3,c4,y1,y2,y3,y4,y5,out
 
+
+class Conv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(Conv, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.conv(x)
+
+class Mlp_E(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(Mlp_E, self).__init__()
+        self.mlp = MLP1(
+                in_features=in_channels,
+                hidden_features=out_channels//2,
+                out_features=out_channels,
+        )
+        
+        self.out_channels = out_channels
+        
+    def forward(self, x):
+        
+        b,c,h,w = x.shape
+        x = x.flatten(2).transpose(1, 2) 
+        print('xxx',x.shape)
+        x = self.mlp(x)
+        x = x.permute(0,2,1)
+        x = x.view(b, self.out_channels , h, w)
+        return x
+    
+    
 class Teacher_Student(nn.Module):
     def __init__(self, n_channels=1):
         super(Teacher_Student, self).__init__()
@@ -589,17 +648,27 @@ class Teacher_Student(nn.Module):
         self.teacherC_model = TCNet()
         
         
-        # self.e1 = Conv(base,base//factor)
-        # self.e2 = Conv(2*base,2*base//factor)
-        # self.e3 = Conv(4*base,4*base//factor)
-        # self.e4 = Conv(8*base,8*base//factor)
-        # self.e5 = Conv(16*base,16*base//factor)
-
-
-        # self.d4 = Conv(base,base//factor)
-        # self.d3 = Conv(2*base,2*base//factor)
-        # self.d2 = Conv(4*base,4*base//factor)
-        # self.d1 = Conv(8*base,8*base//factor)
+        
+        self.c1 = Conv(init_embd_tt,init_embd_tt//factor)
+        self.c2 = Conv(init_embd_tt,init_embd_tt//factor)
+        self.c3 = Conv(2*init_embd_tt,2*init_embd_tt//factor)
+        self.c4 = Conv(4*init_embd_tt,4*init_embd_tt//factor)
+        self.c5 = Conv(8*init_embd_tt,8*init_embd_tt//factor)
+        
+        
+        self.d1 = Conv(init_embd_tt,init_embd_tt//factor)
+        self.d2 = Conv(init_embd_tt,init_embd_tt//factor)
+        self.d3 = Conv(2*init_embd_tt,2*init_embd_tt//factor)
+        self.d4 = Conv(4*init_embd_tt,4*init_embd_tt//factor)
+        self.d5 = Conv(8*init_embd_tt,8*init_embd_tt//factor)
+                
+        self.a1 = Mlp_E(init_embd_tt,init_embd_tt//factor)
+        self.a2 = Mlp_E(init_embd_tt,init_embd_tt//factor)
+        self.a3 = Mlp_E(2*init_embd_tt,2*init_embd_tt//factor)
+        self.a4 = Mlp_E(4*init_embd_tt,4*init_embd_tt//factor)
+        self.a5 = Mlp_E(8*init_embd_tt,8*init_embd_tt//factor)
+        
+    
         
         # self.Stats_F = module_1()
                 
@@ -607,7 +676,28 @@ class Teacher_Student(nn.Module):
         x0S,Econv1S,Eattention1S,Econv2S,Eattention2S,Econv3S,Eattention3S,Econv4S,Eattention4S,Dattention0S,Dconv0S,Dattention1S,Dconv1S,Dattention2S,Dconv2S,Dattention3S,Dconv3S,Dattention4S,Dconv4S,outS = self.student_model(inp)
         x0_T1,Eattention1_T1,Eattention2_T1,Eattention3_T1,Eattention4_T1,Dattention0_T1,Dattention1_T1,Dattention2_T1,Dattention3_T1,Dattention4_T1,out_T1 = self.teacherT_model(inp)
         x0_C,x1_C,x2_C,x3_C,x4_C,y0_C,y1_C,y2_C,y3_C,y4_C,out_C = self.teacherC_model(inp)
-
+        
+        
+        x0_C = self.c1(x0_C)
+        x1_C = self.c2(x1_C)
+        x2_C = self.c3(x2_C)
+        x3_C = self.c4(x3_C)
+        x4_C = self.c5(x4_C)
+        
+        x0_T1 = self.a1(x0_T1)
+        Eattention1_T1 = self.a2(Eattention1_T1)
+        Eattention2_T1 = self.a3(Eattention2_T1)
+        Eattention3_T1 = self.a4(Eattention3_T1)
+        Eattention4_T1 = self.a5(Eattention4_T1)
+        
+        
+        y0_C = self.d5(y0_C)
+        y1_C = self.d4(y1_C)
+        y2_C = self.d3(y2_C)
+        y3_C = self.d2(y3_C)
+        y4_C = self.d1(y4_C)
+        
+        
         
         print('Student x0S = ',x0S.shape,'T_1 = ',x0_T1.shape,x0_C.shape)
         print('Student Econv1S = ',Econv1S.shape,'T_1 = ',x1_C.shape)
