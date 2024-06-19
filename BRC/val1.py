@@ -130,6 +130,18 @@ def Data_Loader(csv_folder, batch_size, num_workers=0, pin_memory=True):
     data_loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=True)
     return data_loader
 
+# Paths and configurations
+csv_path_val = r'C:\My_Data\BRC_Project\data\workstream_3\data_csv\file1/'
+val_loader = Data_Loader(csv_path_val, batch_size=1)
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+path_to_checkpoints = r"C:\My_Data\BRC_Project\data\workstream_3\data_csv\Model1.pth.tar"
+csv_file_path = os.path.join(r'C:\My_Data\BRC_Project\data\workstream_3\data_csv/', 'model1.csv')
+
+model_1 = Net()
+dataset = Dataset_val(csv_path_val)
+
+
 # Error checking function
 def check_error(loader, model, device, scaler):
     model.eval()
@@ -141,7 +153,7 @@ def check_error(loader, model, device, scaler):
     
     with open(csv_file_path, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['y4', 'p4'])
+        writer.writerow(['y1','y2','y3','y4', 'p1', 'p2', 'p3', 'p4'])
 
     with torch.no_grad():
         for x, y in loader:
@@ -150,42 +162,21 @@ def check_error(loader, model, device, scaler):
 
             p1, p2, p3, p4 = model(x)
             y = y[0,:]
-            y5_orig = scaler.inverse_transform(y).reshape(y.shape)
-            
-            print(p1.shape)
+            y4_gt = scaler.inverse_transform(y).reshape(y.shape)
+
             p = torch.cat([p1,p2,p3,p4], dim=2)
             p = p[0,:]
-            print(p.shape)
-            print(y5_orig.shape)
+
+            p4_pred = scaler.inverse_transform(p).reshape(p.shape)
             
-            p5_pred = scaler.inverse_transform(p).reshape(p.shape)
-            
-            y1, y2, y3, y4 = y5_orig[:, 0:1], y5_orig[:,  1:2], y5_orig[:,  2:3], y5_orig[:, 3:4]
-            p1, p2, p3, p4 = p5_pred[:, 0:1], p5_pred[:,  1:2], p5_pred[:,  2:3], p5_pred[:, 3:4]
-            
-           
-            
-            # Ensure the correct shape for inverse transformation
-            #y4_np = y4.cpu().numpy().reshape(-1, 1)
-            #/p4_np = p4.cpu().numpy().reshape(-1, 1)
-            #y = y[0,:]
-            #y5_orig = scaler.inverse_transform(y).reshape(y.shape)
-            #print(y5_orig.shape)
-            
-            
-            #y4_orig = scaler.inverse_transform(y4_np).reshape(p4.shape)
-            #p4_orig = scaler.inverse_transform(p4_np).reshape(p4.shape)
-            
-            
-            # error_1 += torch.sum(torch.abs(p1 - y1)).item()
-            # error_2 += torch.sum(torch.abs(p2 - y2)).item()
-            # error_3 += torch.sum(torch.abs(p3 - y3)).item()
-            # error_4 += torch.sum(torch.abs(p5_pred - y5_orig)).item()
+            y1, y2, y3, y4 = y4_gt[:, 0:1], y4_gt[:,  1:2], y4_gt[:,  2:3], y4_gt[:, 3:4]
+            p1, p2, p3, p4 = p4_pred[:, 0:1], p4_pred[:,  1:2], p4_pred[:,  2:3], p4_pred[:, 3:4]
+
             
             with open(csv_file_path, mode='a', newline='') as file:
                 writer = csv.writer(file)
-                for y_val, p_val in zip(y4.flatten(), p4.flatten()):
-                    writer.writerow([y_val, p_val])
+                for y1, y2 ,y3 ,y4,p1,p2,p3,p4 in zip(y1.flatten(), y2.flatten(),y3.flatten(), y4.flatten(),p1.flatten(), p2.flatten(),p3.flatten(), p4.flatten()):
+                    writer.writerow([y1,y2,y3,y4,p1,p2,p3,p4])
 
     overall_error = (error_1 + error_2 + error_3 + error_4) / 4
     print(f"Error_1  : {error_1/len(loader)}")
@@ -205,18 +196,8 @@ def eval_():
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     
-    loss = check_error(val_loader, model, DEVICE, dataset.scaler)
+    _ = check_error(val_loader, model, DEVICE, dataset.scaler)
 
-# Paths and configurations
-csv_path_val = r'C:\My_Data\BRC_Project\data\workstream_3\data_csv\data1/'
-val_loader = Data_Loader(csv_path_val, batch_size=1)
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-path_to_checkpoints = r"C:\My_Data\BRC_Project\data\workstream_3\data_csv\Model1.pth.tar"
-csv_file_path = os.path.join(r'C:\My_Data\BRC_Project\data\workstream_3\data_csv/', 'output_G23.csv')
-
-model_1 = Net()
-dataset = Dataset_val(csv_path_val)
 
 if __name__ == "__main__":
     eval_()
