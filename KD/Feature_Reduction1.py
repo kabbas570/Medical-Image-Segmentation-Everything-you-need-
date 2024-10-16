@@ -64,6 +64,13 @@ class LearnedChannelSelfAttentionPooling(nn.Module):
         # Reshape the input tensor to group channels into chunks of size factor
         
         x_reshaped = x.view(batch_size, -1, self.factor, height, width)  # [B, output_dim, factor, H, W]
+
+        ## x_reshaped --> entire attention
+        ### x_reshaped = [B,16,4,16,16]
+        # x_reshaped1 = [B,for(1-16),4,16,16] --> apply attention
+        
+        ## [B,16,0,16,16] --> [B,16,16*16,4] 
+        ## [B,16,H, W]
         
         # Self-attention mechanism
         query = self.query(x).view(batch_size, -1, height * width).transpose(1, 2)  # [B, H*W, output_dim]
