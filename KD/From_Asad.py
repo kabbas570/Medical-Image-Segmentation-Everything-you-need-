@@ -35,3 +35,5 @@ class LearnedChannelAveragePooling(nn.Module):
         for i, t in enumerate(splitted_tensors):
             pooled_tensors.append(torch.sum(t * weighting_softmax[i, :].view(1, -1, 1, 1), dim=1, keepdim=True))
         return torch.cat(pooled_tensors, dim=1)
+
+assert torch.allclose(pooled_t, pooled_l, atol=1e-6)
