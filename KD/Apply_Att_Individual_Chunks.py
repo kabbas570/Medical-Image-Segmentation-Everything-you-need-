@@ -27,12 +27,8 @@ class LearnedChannelSelfAttentionPooling(nn.Module):
         assert channels == self.chunk_size * self.student_dim, "Mismatch between input channels and expected dimensions"
         
         chunks = torch.split(x, split_size_or_sections=self.chunk_size, dim=1)
-        
-        conc_chunks = []
-        for t in chunks:
-            conc_chunks.append(t)
-        all_chunks = torch.stack(conc_chunks, dim=1) ## [B,num_chunks,chunk_size,H,W]
-        
+        all_chunks = torch.stack(chunks, dim=1) ## [B,num_chunks,chunk_size,H,W]
+
         attended_chunks = []
         for i, chunk in enumerate(chunks):
             # Apply self-attention to each chunk separately
